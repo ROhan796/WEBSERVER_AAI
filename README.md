@@ -4,21 +4,22 @@
 
 This server is designed to work with `main.py` from the hardware team:
 - **Sensors:** DHT22 (Pin 15) + MQ135 (GP26)
-- **Features:** WHI calculation, dual readings, averaging
-- **Device ID:** PICO2W_001
+- **Features:** WHI calculation with penalty breakdown, dual readings, averaging
+- **Device ID:** Auto-generated from Pico W unique ID
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [Configuration](#configuration)
 - [File Documentation](#file-documentation)
 - [API Reference](#api-reference)
 - [Data Format](#data-format)
 - [Hardware Setup](#hardware-setup)
 - [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
 
 ---
 
@@ -37,7 +38,7 @@ This server is designed to work with `main.py` from the hardware team:
 
 **How it works:**
 1. Pico W reads sensors (DHT22 + MQ135)
-2. Calculates NH3, H2S, WHI values
+2. Calculates NH3, H2S, WHI values with penalty breakdown
 3. Sends JSON data to laptop via WiFi
 4. Server saves data to `raw_dump.jsonl`
 
@@ -48,11 +49,17 @@ This server is designed to work with `main.py` from the hardware team:
 ### 1. Edit main.py on Pico W
 
 ```python
-# Line 11-13 in main.py
+# Configuration section in main.py
 WIFI_SSID     = "YourWiFiName"
 WIFI_PASSWORD = "YourPassword"
-SERVER_URL    = "http://YOUR_LAPTOP_IP:5000/api/sensor-data"
+SERVER_IP     = "YOUR_LAPTOP_IP"      # e.g., "192.168.1.105"
+SERVER_PORT   = 5000                   # Must match server.py PORT
+SERVER_URL    = "http://{}:{}/api/sensor-data".format(SERVER_IP, SERVER_PORT)
 ```
+
+**To find your laptop IP:**
+- Windows: Open Command Prompt, type `ipconfig`
+- Look for "IPv4 Address" under WiFi adapter (e.g., `192.168.1.105`)
 
 ### 2. Start Server on Laptop
 
@@ -67,6 +74,30 @@ Data will start appearing in the server window!
 
 ---
 
+## Configuration
+
+### Port Configuration (Change in One Place)
+
+Both `server.py` and `main.py` use a PORT variable. To change the port:
+
+1. **server.py** - Change `PORT = 5000` to your desired port
+2. **main.py** - Change `SERVER_PORT = 5000` to match
+
+This avoids hardcoding the port in multiple places.
+
+```python
+# server.py
+HOST = "0.0.0.0"
+PORT = 5000
+
+# main.py
+SERVER_IP     = "YOUR_LAPTOP_IP"
+SERVER_PORT   = 5000
+SERVER_URL    = "http://{}:{}/api/sensor-data".format(SERVER_IP, SERVER_PORT)
+```
+
+---
+
 ## File Documentation
 
 ### server.py - Flask Web Server
@@ -75,25 +106,21 @@ Data will start appearing in the server window!
 
 **Purpose:** Receives sensor data from Pico W and saves to file
 
+**Configuration Variables:**
+```python
+HOST = "0.0.0.0"    # Listen on all interfaces
+PORT = 5000          # Change here, update main.py SERVER_PORT too
+```
+
 **Endpoints:**
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/sensor-data` | Main endpoint (used by main.py) |
-| POST | `/upload` | Alternative endpoint (same function) |
+| POST | `/upload` | Alternative endpoint (backward compat) |
 | GET | `/ping` | Health check |
 | GET | `/data` | View all received readings |
 | GET | `/` | Server status |
-
-**Key Functions:**
-
-```python
-@app.route("/api/sensor-data", methods=["POST"])
-def receive_data():
-    # Receives JSON from main.py
-    # Saves to raw_dump.jsonl
-    # Shows on screen
-```
 
 **Output Format (on screen):**
 ```
@@ -107,56 +134,42 @@ Avg NH3      : 5.5 ppm
 Peak NH3     : 6.2 ppm
 Avg H2S      : 2.1 ppm
 WHI          : 85
+Penalty NH3  : 10
+Penalty H2S  : 8
+Penalty Temp : 0
+Penalty Hum  : 5
+Throughput   : 0
+Occupancy    : 0
+Received at  : 2026-07-01T12:30:05
 ==================================================
 ```
 
 ---
 
-### main.py - Pico W Script (Hardware Team's Code)
+### main.py - Pico W Script
 
-**Path:** Your existing `main.py` on Pico W
+**Path:** Your `main.py` on Pico W
 
-**What it does:**
-
-1. **Connects to WiFi**
-2. **Reads sensors:**
-   - DHT22 on Pin 15 (temperature, humidity)
-   - MQ135 on GP26 (air quality)
-3. **Calculates values:**
-   - NH3 ppm (ammonia)
-   - H2S ppm (hydrogen sulfide)
-   - WHI (Waste Health Index)
-4. **Takes two readings** (30 seconds apart)
-5. **Averages them**
-6. **Sends to server** via HTTP POST
-
-**Data sent to server:**
-```json
-{
-    "device_id": "PICO2W_001",
-    "timestamp": "2026-07-01T12:30:00",
-    "avg_nh3_ppm": 5.5,
-    "peak_nh3_ppm": 6.2,
-    "avg_h2s_ppm": 2.1,
-    "avg_temperature_c": 28.5,
-    "avg_humidity_percent": 65.0,
-    "raw_whi": 85,
-    "throughput": 0,
-    "occupancy_inside": 0
-}
+**Configuration Variables:**
+```python
+WIFI_SSID     = "YourWiFiName"
+WIFI_PASSWORD = "YourPassword"
+SERVER_IP     = "YOUR_LAPTOP_IP"
+SERVER_PORT   = 5000
+SERVER_URL    = "http://{}:{}/api/sensor-data".format(SERVER_IP, SERVER_PORT)
 ```
 
 **Key functions in main.py:**
 
 | Function | Purpose |
 |----------|---------|
-| `connect_wifi()` | Connects Pico W to WiFi |
+| `connect_wifi()` | Connects Pico W to WiFi + NTP time sync |
 | `send_to_server(record)` | Sends JSON to laptop server |
 | `read_dht()` | Reads DHT22 sensor |
 | `read_mq135()` | Reads MQ135 sensor |
 | `ammonia_ppm(ratio)` | Calculates NH3 from MQ135 |
 | `h2s_ppm(ratio)` | Calculates H2S from MQ135 |
-| `calculate_whi()` | Calculates WHI score |
+| `calculate_whi_breakdown()` | Calculates WHI with penalty breakdown |
 | `get_average_readings()` | Takes 2 readings, 30s apart |
 | `create_record(avg_data)` | Creates JSON record |
 | `process_cycle()` | Main cycle - reads, calculates, sends |
@@ -168,6 +181,12 @@ WHI          : 85
 **Path:** `C:\INTERNSHIP_TASK\TASK16\web_server\test_server.py`
 
 **Purpose:** Test server without Pico W hardware
+
+**Configuration Variables:**
+```python
+HOST = "localhost"
+PORT = 5000         # Must match server.py PORT
+```
 
 **Usage:**
 ```bash
@@ -192,11 +211,6 @@ python test_server.py
 
 **Format:** One JSON object per line
 
-**Example:**
-```json
-{"device_id":"PICO2W_001","timestamp":"2026-07-01T12:30:00","avg_nh3_ppm":5.5,"peak_nh3_ppm":6.2,"avg_h2s_ppm":2.1,"avg_temperature_c":28.5,"avg_humidity_percent":65.0,"raw_whi":85,"throughput":0,"occupancy_inside":0,"_received_at":"2026-07-01T12:30:05"}
-```
-
 ---
 
 ## API Reference
@@ -216,6 +230,10 @@ python test_server.py
     "avg_temperature_c": 28.5,
     "avg_humidity_percent": 65.0,
     "raw_whi": 85,
+    "penalty_nh3": 10,
+    "penalty_h2s": 8,
+    "penalty_temperature": 0,
+    "penalty_humidity": 5,
     "throughput": 0,
     "occupancy_inside": 0
 }
@@ -268,14 +286,18 @@ python test_server.py
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
-| `device_id` | string | Device identifier | "PICO2W_001" |
-| `timestamp` | string | ISO 8601 timestamp | "2026-07-01T12:30:00" |
+| `device_id` | string | Device identifier (auto-generated) | "PICO2W_AABBCCDD" |
+| `timestamp` | string | ISO 8601 timestamp (IST) | "2026-07-01T12:30:00" |
 | `avg_nh3_ppm` | float | Average NH3 (ammonia) | 5.5 |
 | `peak_nh3_ppm` | float | Peak NH3 reading | 6.2 |
 | `avg_h2s_ppm` | float | Average H2S (hydrogen sulfide) | 2.1 |
 | `avg_temperature_c` | float | Average temperature (Celsius) | 28.5 |
 | `avg_humidity_percent` | float | Average humidity (%) | 65.0 |
 | `raw_whi` | integer | Waste Health Index (0-100) | 85 |
+| `penalty_nh3` | integer | NH3 penalty score | 10 |
+| `penalty_h2s` | integer | H2S penalty score | 8 |
+| `penalty_temperature` | integer | Temperature penalty score | 0 |
+| `penalty_humidity` | integer | Humidity penalty score | 5 |
 | `throughput` | integer | Throughput (currently 0) | 0 |
 | `occupancy_inside` | integer | Occupancy count (currently 0) | 0 |
 
@@ -328,7 +350,9 @@ Raspberry Pi Pico W:
 
 2. **Check main.py SERVER_URL:**
    ```python
-   SERVER_URL = "http://CORRECT_IP:5000/api/sensor-data"
+   SERVER_IP     = "CORRECT_IP"
+   SERVER_PORT   = 5000
+   SERVER_URL    = "http://{}:{}/api/sensor-data".format(SERVER_IP, SERVER_PORT)
    ```
 
 3. **Check both devices on same WiFi**
@@ -359,7 +383,7 @@ curl http://localhost:5000/ping
 ### Test 2: Manual Data Upload
 
 ```bash
-curl -X POST http://localhost:5000/api/sensor-data -H "Content-Type: application/json" -d '{"device_id":"PICO2W_001","timestamp":"2026-07-01T12:30:00","avg_nh3_ppm":5.5,"peak_nh3_ppm":6.2,"avg_h2s_ppm":2.1,"avg_temperature_c":28.5,"avg_humidity_percent":65.0,"raw_whi":85,"throughput":0,"occupancy_inside":0}'
+curl -X POST http://localhost:5000/api/sensor-data -H "Content-Type: application/json" -d '{"device_id":"PICO2W_001","timestamp":"2026-07-01T12:30:00","avg_nh3_ppm":5.5,"peak_nh3_ppm":6.2,"avg_h2s_ppm":2.1,"avg_temperature_c":28.5,"avg_humidity_percent":65.0,"raw_whi":85,"penalty_nh3":10,"penalty_h2s":8,"penalty_temperature":0,"penalty_humidity":5,"throughput":0,"occupancy_inside":0}'
 ```
 
 ### Test 3: Automated Test
@@ -375,19 +399,14 @@ python test_server.py
 | File | Purpose |
 |------|---------|
 | `server.py` | Flask server (run on laptop) |
-| `test_server.py` | Test script |
-| `main.py` | Your Pico W script (hardware team's code) |
+| `test_server.py` | Test script (no hardware needed) |
+| `main.py` | Pico W script (reference copy) |
 | `QUICK_START.md` | Simple getting started guide |
 | `README.md` | This documentation |
 | `requirements.txt` | Python packages needed |
-| `setup.bat` | Windows setup script |
 | `raw_dump.jsonl` | Data file (auto-created) |
 
 ---
 
 **Last Updated:** July 2026
 **Compatible with:** main.py (DHT22 + MQ135 + WHI)
-#   W E B S E R V E R _ A A I  
- #   W E B S E R V E R _ A A I  
- #   W E B S E R V E R _ A A I  
- 

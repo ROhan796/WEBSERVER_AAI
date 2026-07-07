@@ -7,13 +7,18 @@ The Pico W acts as a client and POSTs data to this server.
 Compatible with main.py from hardware team:
 - DHT22 temperature/humidity sensor on Pin 15
 - MQ135 air quality sensor on GP26
-- WHI (Waste Health Index) calculation
+- WHI (Waste Health Index) calculation with penalty breakdown
+
+Configuration:
+    Edit HOST and PORT variables below. Change PORT in one place
+    and update SERVER_URL in main.py accordingly.
 
 Usage:
     python server.py
 
 Endpoints:
     POST /api/sensor-data  - Receive sensor data from Pico W
+    POST /upload           - Alternative endpoint (backward compat)
     GET  /ping             - Health check
     GET  /data             - View all received data
     GET  /                 - Server status page
@@ -25,6 +30,10 @@ from datetime import datetime
 import os
 
 app = Flask(__name__)
+
+# Server Configuration (change PORT here if needed)
+HOST = "0.0.0.0"
+PORT = 5000
 
 # File to store raw sensor data (JSONL format)
 RAW_DUMP_FILE = "raw_dump.jsonl"
@@ -49,6 +58,10 @@ def receive_data():
         "avg_temperature_c": 28.5,
         "avg_humidity_percent": 65.0,
         "raw_whi": 85,
+        "penalty_nh3": 10,
+        "penalty_h2s": 8,
+        "penalty_temperature": 0,
+        "penalty_humidity": 5,
         "throughput": 0,
         "occupancy_inside": 0
     }
@@ -82,6 +95,10 @@ def receive_data():
         print("Peak NH3     :", data.get("peak_nh3_ppm", "N/A"), "ppm")
         print("Avg H2S      :", data.get("avg_h2s_ppm", "N/A"), "ppm")
         print("WHI          :", data.get("raw_whi", "N/A"))
+        print("Penalty NH3  :", data.get("penalty_nh3", "N/A"))
+        print("Penalty H2S  :", data.get("penalty_h2s", "N/A"))
+        print("Penalty Temp :", data.get("penalty_temperature", "N/A"))
+        print("Penalty Hum  :", data.get("penalty_humidity", "N/A"))
         print("Throughput   :", data.get("throughput", "N/A"))
         print("Occupancy    :", data.get("occupancy_inside", "N/A"))
         print("Received at  :", data["_received_at"])
@@ -128,6 +145,8 @@ def index():
     return jsonify({
         "server": "Pico W Sensor Data Receiver",
         "status": "running",
+        "host": HOST,
+        "port": PORT,
         "compatible_with": "main.py (DHT22 + MQ135 + WHI)",
         "endpoints": {
             "POST /api/sensor-data": "Receive sensor data from Pico W (main endpoint)",
@@ -146,16 +165,17 @@ if __name__ == "__main__":
     print("Pico W Sensor Data Server")
     print("Compatible with: main.py (DHT22 + MQ135 + WHI)")
     print("=" * 60)
-    print(f"Data file: {RAW_DUMP_FILE}")
-    print("Endpoints:")
-    print("  POST http://localhost:5000/api/sensor-data  - Receive data")
-    print("  POST http://localhost:5000/upload            - Receive data (alt)")
-    print("  GET  http://localhost:5000/ping              - Health check")
-    print("  GET  http://localhost:5000/data              - View data")
+    print(f"Data file : {RAW_DUMP_FILE}")
+    print(f"Server    : http://{HOST}:{PORT}")
     print("=" * 60)
-    print("Starting server on http://0.0.0.0:5000")
+    print("Endpoints:")
+    print(f"  POST http://localhost:{PORT}/api/sensor-data  - Receive data")
+    print(f"  POST http://localhost:{PORT}/upload            - Receive data (alt)")
+    print(f"  GET  http://localhost:{PORT}/ping              - Health check")
+    print(f"  GET  http://localhost:{PORT}/data              - View data")
+    print("=" * 60)
     print("Press Ctrl+C to stop")
     print("=" * 60)
-    
-    # Run server on all interfaces (0.0.0.0) so Pico W can reach it
-    app.run(host="0.0.0.0", port=5000, debug=True)
+
+    # Run server on all interfaces so Pico W can reach it
+    app.run(host=HOST, port=PORT, debug=True)

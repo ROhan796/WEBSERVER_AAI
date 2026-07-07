@@ -11,12 +11,14 @@ Your `main.py` already has WiFi + server sending code built in! You just need to
 
 ## Step 1: Edit main.py on Pico W
 
-Open `main.py` and change these lines (around line 11-13):
+Open `main.py` and change these lines:
 
 ```python
 WIFI_SSID     = "YourActualWiFiName"      # <-- YOUR WIFI NAME
 WIFI_PASSWORD = "YourActualPassword"       # <-- YOUR WIFI PASSWORD
-SERVER_URL    = "http://192.168.1.XX:5000/api/sensor-data"  # <-- YOUR LAPTOP IP
+SERVER_IP     = "192.168.1.XX"             # <-- YOUR LAPTOP IP
+SERVER_PORT   = 5000                       # <-- Must match server.py PORT
+SERVER_URL    = "http://{}:{}/api/sensor-data".format(SERVER_IP, SERVER_PORT)
 ```
 
 **To find your laptop IP:**
@@ -38,7 +40,9 @@ You'll see:
 Pico W Sensor Data Server
 Compatible with: main.py (DHT22 + MQ135 + WHI)
 ============================================================
-Starting server on http://0.0.0.0:5000
+Data file : raw_dump.jsonl
+Server    : http://0.0.0.0:5000
+============================================================
 ```
 
 **Keep this window open!**

@@ -7,11 +7,14 @@ works before connecting the actual Pico W.
 Compatible with main.py from hardware team:
 - DHT22 temperature/humidity sensor on Pin 15
 - MQ135 air quality sensor on GP26
-- WHI (Waste Health Index) calculation
+- WHI (Waste Health Index) calculation with penalty breakdown
 
 Usage:
     1. Start the server: python server.py
     2. Run this test: python test_server.py
+
+Configuration:
+    Edit PORT below to match your server.py PORT setting.
 """
 
 import requests
@@ -19,8 +22,10 @@ import json
 import time
 from datetime import datetime
 
-# Server URL
-SERVER_URL = "http://localhost:5000"
+# Server Configuration (must match server.py)
+HOST = "localhost"
+PORT = 5000
+SERVER_URL = f"http://{HOST}:{PORT}"
 
 
 def test_ping():
@@ -50,6 +55,10 @@ def test_upload():
         "avg_temperature_c": 28.5,
         "avg_humidity_percent": 65.0,
         "raw_whi": 85,
+        "penalty_nh3": 10,
+        "penalty_h2s": 8,
+        "penalty_temperature": 0,
+        "penalty_humidity": 5,
         "throughput": 0,
         "occupancy_inside": 0
     }
@@ -84,6 +93,10 @@ def test_upload_alt():
         "avg_temperature_c": 27.0,
         "avg_humidity_percent": 60.0,
         "raw_whi": 90,
+        "penalty_nh3": 10,
+        "penalty_h2s": 0,
+        "penalty_temperature": 0,
+        "penalty_humidity": 0,
         "throughput": 0,
         "occupancy_inside": 0
     }
@@ -137,6 +150,7 @@ def main():
     print("Compatible with: main.py (DHT22 + MQ135 + WHI)")
     print("=" * 60)
     print(f"Server URL: {SERVER_URL}")
+    print(f"Port: {PORT}")
     print("Make sure the server is running first!")
     print("Start it with: python server.py")
     print("=" * 60)
@@ -172,8 +186,8 @@ def main():
         print("Some tests failed. Check the errors above.")
         print("\nTroubleshooting:")
         print("1. Make sure server.py is running")
-        print("2. Check if port 5000 is not blocked by firewall")
-        print("3. Try running: curl http://localhost:5000/ping")
+        print("2. Check if port", PORT, "is not blocked by firewall")
+        print(f"3. Try running: curl http://localhost:{PORT}/ping")
     print("=" * 60)
 
 
